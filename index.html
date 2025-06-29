@@ -283,7 +283,7 @@
             }
         }
 
-        async function updateSession(sessionId) {
+        async function updateSession(sessionId, itemName, itemId) {
             try {
                 const response = await fetch(`${API_URL}/trainee-sessions/${sessionId}`, {
                     method: 'PUT',
@@ -299,11 +299,16 @@
                     const data = await response.json();
                     return { success: true, totalTime: data.session.total_time };
                 } else {
-                    return { success: false };
+                    const errorData = await response.json();
+                    if (errorData.code === 40001 && errorData.message === "Phiên học đã kết thúc") {
+                        return { success: false, isCompleted: true };
+                    }
+                    return { success: false, isCompleted: false };
                 }
             } catch (error) {
                 console.error('Error updating session:', error);
-                return { success: false };
+                document.getElementById('studyStatus').textContent = `Lỗi khi cập nhật trạng thái mục: ${itemName} (ID: ${itemId})`;
+                return { success: false, isCompleted: false };
             }
         }
 
@@ -327,7 +332,15 @@
             let totalTime = startResult.totalTime;
             const sessionId = startResult.sessionId;
             const interval = setInterval(async () => {
-                const updateResult = await updateSession(sessionId);
+                const updateResult = await updateSession(sessionId, itemName, itemId);
+                if (updateResult.isCompleted) {
+                    clearInterval(interval);
+                    document.getElementById('studyStatus').textContent = `Hoàn thành mục: ${itemName} (ID: ${itemId})`;
+                    // Refresh course details to update completion status
+                    const courseId = currentItems.find(item => item.id === itemId).course_id;
+                    await fetchCourseDetails(courseId);
+                    return;
+                }
                 if (!updateResult.success) {
                     clearInterval(interval);
                     document.getElementById('studyStatus').textContent = `Lỗi khi cập nhật trạng thái mục: ${itemName} (ID: ${itemId})`;
@@ -383,7 +396,12 @@
 
                 while (totalTime < requiredTime) {
                     await new Promise(resolve => setTimeout(resolve, 60000)); // Wait 1 minute
-                    const updateResult = await updateSession(sessionId);
+                    const updateResult = await updateSession(sessionId, item.name, item.id);
+                    if (updateResult.isCompleted) {
+                        document.getElementById('studyStatus').textContent = `Hoàn thành mục: ${item.name} (ID: ${item.id})`;
+                        item.isCompleted = true; // Mark as completed
+                        break;
+                    }
                     if (!updateResult.success) {
                         document.getElementById('studyStatus').textContent = `Lỗi khi cập nhật trạng thái mục: ${item.name} (ID: ${item.id})`;
                         isAutoStudying = false;
@@ -393,7 +411,6 @@
                     document.getElementById('studyStatus').textContent = `Đang học mục: ${item.name} (ID: ${item.id}), thời gian đã học: ${totalTime} giây`;
                 }
 
-                document.getElementById('studyStatus').textContent = `Hoàn thành mục: ${item.name} (ID: ${item.id})`;
                 item.isCompleted = true; // Mark item as completed
                 await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before next item
             }
