@@ -1,102 +1,423 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tra cứu đơn giao vận hàng loạt</title>
+    <title>Danh sách khóa học</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            flex-direction: column;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
         }
-        .container {
-            background-color: #fff;
+
+        .course-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .course-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .course-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .course-details {
+            display: none;
+            background: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            width: 90%;
-            max-width: 800px;
-            text-align: center;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        h1 {
-            margin-bottom: 20px;
-            color: #333;
+
+        .course-details.show {
+            display: block;
         }
-        .search-bar {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
+
+        .module {
+            margin: 20px 0;
+            border-left: 4px solid #007bff;
+            padding-left: 15px;
         }
-        input[type="text"] {
-            flex: 1;
+
+        .item {
+            margin: 10px 0;
             padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px 0 0 4px;
+            background: #f8f9fa;
+            border-radius: 4px;
         }
-        select {
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-left: none;
-            border-radius: 0 4px 4px 0;
-            background-color: #fff;
+
+        .item.completed {
+            background: #e6ffe6;
         }
-        button {
-            padding: 10px 20px;
-            margin: 5px;
+
+        .item button {
+            background: #28a745;
+            color: white;
+            padding: 5px 10px;
             border: none;
             border-radius: 4px;
-            background-color: #007bff;
-            color: #fff;
             cursor: pointer;
         }
-        button:hover {
-            background-color: #0056b3;
+
+        .item button:hover {
+            background: #218838;
         }
-        .footer {
-            margin-top: 20px;
-            color: #777;
+
+        .item.completed button {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: #333;
+        }
+
+        .back-button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .back-button:hover {
+            background: #0056b3;
+        }
+
+        .auto-study-button {
+            background: #ffc107;
+            color: black;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .auto-study-button:hover {
+            background: #e0a800;
+        }
+
+        .loading,
+        .study-status {
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
         }
     </style>
+</head>
+
+<body>
+    <h1>Danh sách khóa học</h1>
+    <div id="courseList" class="course-list"></div>
+    <div id="courseDetails" class="course-details">
+        <button class="back-button" onclick="showCourseList()">Quay lại danh sách</button>
+        <button class="auto-study-button" onclick="startAutoStudy()">Tự động học tất cả</button>
+        <div id="studyStatus" class="study-status"></div>
+        <div id="courseContent"></div>
+    </div>
+    <div id="loading" class="loading">Đang tải...</div>
+
     <script>
-        function searchOrders() {
-            var orderCodes = document.getElementById('orderCodes').value.split(' ');
-            var searchType = document.getElementById('searchType').value;
-            for (var i = 0; i < orderCodes.length; i++) {
-                var orderCode = orderCodes[i].trim();
-                if (orderCode !== '') {
-                    var url = '';
-                    if (searchType === 'option1') {
-                        url = 'https://giaovan.phongvu.vn/van-don/' + orderCode + '?type=order_code';
-                    } else if (searchType === 'option2') {
-                        url = 'https://erp.phongvu.vn/orders/marketplace/' + orderCode;
-                    } else if (searchType === 'option3') {
-                        url = 'https://erp.phongvu.vn/orders/seller/1/' + orderCode;
+        const API_URL = 'https://minhlong.lms.shlx.vn/v1/lms';
+        const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjQ5NTA5NSwidHlwZSI6MCwic3YiOiJhRFB2bi4xIiwiZXhwIjoxNzUyNDMxNTE2fQ.faex69tWn5TTCjy-RbgoCAp1VT5iRBPnp7gFyhlawKI';
+        let currentItems = [];
+        let isAutoStudying = false;
+
+        async function fetchCourses() {
+            try {
+                const response = await fetch(`${API_URL}/course-links`, {
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Accept': 'application/json',
+                        'ngrok-skip-browser-warning': '1'
                     }
-                    window.open(url, '_blank');
-                }
+                });
+                const courses = await response.json();
+                displayCourses(courses);
+            } catch (error) {
+                console.error('Error fetching courses:', error);
+                document.getElementById('loading').textContent = 'Lỗi khi tải danh sách khóa học';
             }
         }
+
+        function displayCourses(courses) {
+            const courseList = document.getElementById('courseList');
+            courseList.innerHTML = '';
+            document.getElementById('loading').style.display = 'none';
+
+            courses.forEach(course => {
+                const courseCard = document.createElement('div');
+                courseCard.className = 'course-card';
+                courseCard.innerHTML = `
+                    <h3>${course.lms_course.name}</h3>
+                    <p>Thời gian yêu cầu: ${course.lms_course.meta_data.required_time / 60} giờ</p>
+                    <p>Môn học: ${course.lms_course.subject.name}</p>
+                `;
+                courseCard.addEventListener('click', () => fetchCourseDetails(course.lms_course.id));
+                courseList.appendChild(courseCard);
+            });
+        }
+
+        async function fetchTraineeStats(courseId) {
+            try {
+                const response = await fetch(`${API_URL}/trainee-stats?lms_course_id=${courseId}&item_id=0`, {
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Accept': 'application/json',
+                        'ngrok-skip-browser-warning': '1'
+                    }
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching trainee stats:', error);
+                return [];
+            }
+        }
+
+        async function fetchCourseDetails(courseId) {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                const [courseResponse, statsResponse] = await Promise.all([
+                    fetch(`${API_URL}/courses/${courseId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${TOKEN}`,
+                            'Accept': 'application/json',
+                            'ngrok-skip-browser-warning': '1'
+                        }
+                    }),
+                    fetchTraineeStats(courseId)
+                ]);
+                const course = await courseResponse.json();
+                const stats = statsResponse;
+
+                currentItems = [];
+                course.modules.forEach(module => {
+                    module.items.forEach(item => {
+                        const stat = stats.find(s => s.item_id === item.id);
+                        item.isCompleted = stat && stat.total_time >= item.required_time * 60;
+                        item.course_id = courseId; // Store course_id for refresh
+                        currentItems.push(item);
+                    });
+                });
+                displayCourseDetails(course);
+            } catch (error) {
+                console.error('Error fetching course details:', error);
+                document.getElementById('loading').textContent = 'Lỗi khi tải chi tiết khóa học';
+            }
+        }
+
+        function displayCourseDetails(course) {
+            document.getElementById('courseList').style.display = 'none';
+            const courseDetails = document.getElementById('courseDetails');
+            courseDetails.classList.add('show');
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('studyStatus').textContent = '';
+
+            const content = `
+                <h2>${course.name}</h2>
+                <p><strong>Môn học:</strong> ${course.subject.name}</p>
+                <p><strong>Thời gian yêu cầu:</strong> ${course.meta_data.required_time / 60} giờ</p>
+                <p><strong>Mô tả:</strong> ${course.description || 'Không có mô tả'}</p>
+                <h3>Các chương</h3>
+                ${course.modules.map(module => `
+                    <div class="module">
+                        <h3>${module.name}</h3>
+                        ${module.items.map(item => `
+                            <div class="item ${item.isCompleted ? 'completed' : ''}">
+                                <h4>${item.name}</h4>
+                                <p><strong>Thời gian yêu cầu:</strong> ${item.required_time} phút</p>
+                                <p>${item.description.replace(/\r\n/g, '<br>')}</p>
+                                ${item.isCompleted ?
+                    '<p><strong>Trạng thái:</strong> Đã hoàn thành</p>' :
+                    `<button onclick="studyItem(${item.id}, ${item.required_time}, '${item.name.replace(/'/g, "\\'")}')">Học mục này</button>`}
+                            </div>
+                        `).join('')}
+                    </div>
+                `).join('')}
+            `;
+            document.getElementById('courseContent').innerHTML = content;
+        }
+
+        async function startSession(itemId) {
+            try {
+                const response = await fetch(`${API_URL}/trainee-sessions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': '1'
+                    },
+                    body: JSON.stringify({ item_id: itemId, confirmed: true })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data === null) {
+                        return { success: false, isCompleted: true }; // Item already completed
+                    }
+                    return { success: true, sessionId: data.id, totalTime: data.total_time };
+                } else {
+                    return { success: false, isCompleted: false };
+                }
+            } catch (error) {
+                console.error('Error starting session:', error);
+                return { success: false, isCompleted: false };
+            }
+        }
+
+        async function updateSession(sessionId) {
+            try {
+                const response = await fetch(`${API_URL}/trainee-sessions/${sessionId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': '1'
+                    },
+                    body: JSON.stringify({ check_in_face_str: null })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    return { success: true, totalTime: data.session.total_time };
+                } else {
+                    return { success: false };
+                }
+            } catch (error) {
+                console.error('Error updating session:', error);
+                return { success: false };
+            }
+        }
+
+        async function studyItem(itemId, requiredTime, itemName) {
+            if (isAutoStudying) return; // Prevent manual study during auto-study
+            document.getElementById('studyStatus').textContent = `Đang học mục: ${itemName} (ID: ${itemId})...`;
+
+            const startResult = await startSession(itemId);
+            if (startResult.isCompleted) {
+                document.getElementById('studyStatus').textContent = `Mục: ${itemName} (ID: ${itemId}) đã hoàn thành, bỏ qua.`;
+                // Refresh course details to update completion status
+                const courseId = currentItems.find(item => item.id === itemId).course_id;
+                await fetchCourseDetails(courseId);
+                return;
+            }
+            if (!startResult.success) {
+                document.getElementById('studyStatus').textContent = `Lỗi khi bắt đầu học mục: ${itemName} (ID: ${itemId})`;
+                return;
+            }
+
+            let totalTime = startResult.totalTime;
+            const sessionId = startResult.sessionId;
+            const interval = setInterval(async () => {
+                const updateResult = await updateSession(sessionId);
+                if (!updateResult.success) {
+                    clearInterval(interval);
+                    document.getElementById('studyStatus').textContent = `Lỗi khi cập nhật trạng thái mục: ${itemName} (ID: ${itemId})`;
+                    return;
+                }
+
+                totalTime = updateResult.totalTime;
+                document.getElementById('studyStatus').textContent = `Đang học mục: ${itemName} (ID: ${itemId}), thời gian đã học: ${totalTime} giây`;
+
+                // Convert requiredTime (minutes) to seconds for comparison
+                if (totalTime >= requiredTime * 60) {
+                    clearInterval(interval);
+                    document.getElementById('studyStatus').textContent = `Hoàn thành mục: ${itemName} (ID: ${itemId})`;
+                    // Refresh course details to update completion status
+                    const courseId = currentItems.find(item => item.id === itemId).course_id;
+                    await fetchCourseDetails(courseId);
+                }
+            }, 60000); // Call update every 1 minute
+        }
+
+        async function startAutoStudy() {
+            if (isAutoStudying) {
+                document.getElementById('studyStatus').textContent = 'Đang trong quá trình tự học, vui lòng đợi!';
+                return;
+            }
+            isAutoStudying = true;
+            document.getElementById('studyStatus').textContent = 'Bắt đầu tự học tất cả các mục...';
+
+            for (const item of currentItems) {
+                if (item.isCompleted) {
+                    document.getElementById('studyStatus').textContent = `Bỏ qua mục: ${item.name} (ID: ${item.id}) (đã hoàn thành)`;
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                    continue;
+                }
+
+                document.getElementById('studyStatus').textContent = `Đang học mục: ${item.name} (ID: ${item.id})...`;
+                const startResult = await startSession(item.id);
+                if (startResult.isCompleted) {
+                    document.getElementById('studyStatus').textContent = `Bỏ qua mục: ${item.name} (ID: ${item.id}) (đã hoàn thành)`;
+                    item.isCompleted = true; // Mark as completed
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                    continue;
+                }
+                if (!startResult.success) {
+                    document.getElementById('studyStatus').textContent = `Lỗi khi bắt đầu học mục: ${item.name} (ID: ${item.id})`;
+                    isAutoStudying = false;
+                    return;
+                }
+
+                let totalTime = startResult.totalTime;
+                const sessionId = startResult.sessionId;
+                const requiredTime = item.required_time * 60; // Convert to seconds
+
+                while (totalTime < requiredTime) {
+                    await new Promise(resolve => setTimeout(resolve, 60000)); // Wait 1 minute
+                    const updateResult = await updateSession(sessionId);
+                    if (!updateResult.success) {
+                        document.getElementById('studyStatus').textContent = `Lỗi khi cập nhật trạng thái mục: ${item.name} (ID: ${item.id})`;
+                        isAutoStudying = false;
+                        return;
+                    }
+                    totalTime = updateResult.totalTime;
+                    document.getElementById('studyStatus').textContent = `Đang học mục: ${item.name} (ID: ${item.id}), thời gian đã học: ${totalTime} giây`;
+                }
+
+                document.getElementById('studyStatus').textContent = `Hoàn thành mục: ${item.name} (ID: ${item.id})`;
+                item.isCompleted = true; // Mark item as completed
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before next item
+            }
+
+            document.getElementById('studyStatus').textContent = 'Hoàn thành tự học tất cả các mục!';
+            isAutoStudying = false;
+            // Refresh course details to update completion status
+            const courseId = currentItems.length > 0 ? currentItems[0].course_id : null;
+            if (courseId) await fetchCourseDetails(courseId);
+        }
+
+        function showCourseList() {
+            if (isAutoStudying) {
+                document.getElementById('studyStatus').textContent = 'Đang tự học, không thể quay lại danh sách!';
+                return;
+            }
+            document.getElementById('courseList').style.display = 'grid';
+            document.getElementById('courseDetails').classList.remove('show');
+            document.getElementById('studyStatus').textContent = '';
+        }
+
+        // Khởi tạo
+        document.addEventListener('DOMContentLoaded', fetchCourses);
     </script>
-</head>
-<body>
-    <div class="container">
-        <h1>Tra cứu Logistics Admin hàng loạt</h1>
-        <div class="search-bar">
-            <input type="text" id="orderCodes" placeholder="Nhập các mã đơn hàng, cách nhau bằng dấu cách">
-            <select id="searchType">
-                <option value="option1">logistics Admin</option>
-                <option value="option2">Đơn ERP</option>
-                <option value="option3">Đơn Nhà Bán</option>
-            </select>
-        </div>
-        <button onclick="searchOrders()" aria-label="Tra cứu các đơn hàng">Tra cứu</button>
-    </div>
 </body>
+
 </html>
